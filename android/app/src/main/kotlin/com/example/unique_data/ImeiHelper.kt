@@ -1,59 +1,72 @@
 package com.example.unique_data
 
-import android.Manifest
-import android.content.pm.PackageManager
+import android.annotation.SuppressLint
+import android.content.Context
 import android.os.Build
 import android.provider.Settings
-import android.telephony.TelephonyManager
-import androidx.core.app.ActivityCompat
-import io.flutter.plugin.common.MethodChannel
 import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.plugin.common.MethodChannel
+import android.net.wifi.WifiInfo
+import android.net.wifi.WifiManager
+import android.text.format.Formatter
+import android.os.BatteryManager
+import android.content.IntentFilter
+import android.util.Log
+import android.Manifest
+import android.content.pm.PackageManager
+import android.content.Intent
 
-class ImeiHelper(private val activity: FlutterActivity) {
-    private val CHANNEL = "com.example.imei/imei"
+class ImeiHelper(private val context: Context, private val flutterEngine: FlutterEngine) {
+    private val CHANNEL = "com.example.device/info"
+    private val TAG = "ImeiHelper"
 
-    fun setupChannel(flutterEngine: FlutterEngine) {
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
-            .setMethodCallHandler { call, result ->
-                if (call.method == "getImei") {
+    @SuppressLint("HardwareIds", "MissingPermission")
+    fun setupChannel() {
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getDeviceInfo" -> {
                     try {
-                        val identifier: String = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-                            val telephonyManager =
-                                activity.getSystemService(FlutterActivity.TELEPHONY_SERVICE) as TelephonyManager
-                            if (ActivityCompat.checkSelfPermission(
-                                    activity,
-                                    Manifest.permission.READ_PHONE_STATE
-                                ) != PackageManager.PERMISSION_GRANTED
-                            ) {
-                                result.error("PERMISSION_DENIED", "READ_PHONE_STATE permission not granted", null)
-                                return@setMethodCallHandler
-                            }
+                        val data = mutableMapOf<String, String?>()
 
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                telephonyManager.imei
-                            } else {
-                                telephonyManager.deviceId
-                            }
-                        } else {
-                            // Android 10+ fallback
+                        // Android ID
+                        data["androidId"] = try {
                             Settings.Secure.getString(
-                                activity.contentResolver,
+                                context.contentResolver,
                                 Settings.Secure.ANDROID_ID
-                            )
+                            ) ?: "null"
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error getting Android ID", e)
+                            "Unavailable"
                         }
 
-                        if (identifier != null) {
-                            result.success(identifier)
-                        } else {
-                            result.error("NULL_ID", "Identifier is null", null)
+                        // Device info
+                        data["model"] = Build.MODEL
+                        data["manufacturer"] = Build.MANUFACTURER
+                        data["brand"] = Build.BRAND
+                        data["sdkVersion"] = Build.VERSION.SDK_INT.toString()
+
+                        // Wifi info
+                        try {
+                            val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+                            val wifiInfo = wifiManager.connectionInfo
+                            data["macAddress"] = wifiInfo.macAddress
+                            data["ipAddress"] = Formatter.formatIpAddress(wifiInfo.ipAddress)
+                            data["ssid"] = wifiInfo.ssid?.removeSurrounding("\"") ?: "Not connected"
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error getting WiFi info", e)
+                            data["macAddress"] = "Unavailable"
+                            data["ipAddress"] = "Unavailable"
+                            data["ssid"] = "Unavailable"
                         }
+
+                        result.success(data)
                     } catch (e: Exception) {
-                        result.error("ERROR", "Failed to get identifier: ${e.message}", null)
+                        Log.e(TAG, "General error in getDeviceInfo", e)
+                        result.error("ERROR", "Failed to get device info: ${e.message}", null)
                     }
-                } else {
-                    result.notImplemented()
                 }
+                else -> result.notImplemented()
             }
+        }
     }
 }

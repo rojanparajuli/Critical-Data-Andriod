@@ -13,3 +13,8 @@ class ImeiError extends ImeiState {
   final String message;
   ImeiError(this.message);
 }
+
+class DeviceInfoLoaded extends ImeiState {
+  final Map<String, String?> deviceInfo;
+  DeviceInfoLoaded(this.deviceInfo);
+}

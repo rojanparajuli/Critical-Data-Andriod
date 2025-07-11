@@ -13,14 +13,26 @@ class _PermissionWrapperState extends State<PermissionWrapper> {
   @override
   void initState() {
     super.initState();
-    _requestPhonePermission();
+    _requestAllPermissions();
   }
 
-  Future<void> _requestPhonePermission() async {
-    final status = await Permission.phone.status;
-    if (!status.isGranted) {
-      await Permission.phone.request();
-    }
+  Future<void> _requestAllPermissions() async {
+    Map<Permission, PermissionStatus> statuses = await [
+      Permission.phone,
+      Permission.locationWhenInUse, 
+      Permission.locationAlways,
+      Permission.bluetooth,
+      Permission.storage, 
+      Permission.accessMediaLocation,
+    ].request();
+
+    statuses.forEach((permission, status) {
+      if (status.isDenied) {
+        debugPrint("$permission is denied.");
+      } else if (status.isPermanentlyDenied) {
+        debugPrint("$permission is permanently denied. Please enable it in app settings.");
+      }
+    });
   }
 
   @override
@@ -28,3 +40,4 @@ class _PermissionWrapperState extends State<PermissionWrapper> {
     return const ImeiScreen();
   }
 }
+
